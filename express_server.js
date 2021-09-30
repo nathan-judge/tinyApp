@@ -4,17 +4,15 @@ const PORT = 8080; // default port is 8080
 const bodyParser = require("body-parser");
 const cookieParser = require('cookie-parser')
 
-
-const generateRandomString = function () {
-    let randomString = "";
-    return randomString += Math.floor((1 + Math.random()) * 0x10000).toString(6).substring(1);
-};
-
-
-
 const urlDatabase = {
-    "b2xVn2": "http://www.lighthouselabs.ca",
-    "9sm5xK": "http://www.google.com",
+    b6UTxQ: {
+        longURL: "https://www.tsn.ca",
+        userID: "aJ48lW"
+    },
+    i3BoGr: {
+        longURL: "https://www.google.ca",
+        userID: "aJ48lW"
+    }
 };
 const users = {
     "userRandomID": {
@@ -28,14 +26,37 @@ const users = {
         password: "dishwasher-funk"
     }
 }
-const findUserByEmail = (email) => {
-    for (const userId in users) {
-        const user = users[userId];
-        if (user.email === email) {
-            return user
+const generateRandomString = function () {
+    let randomString = "";
+    return randomString += Math.floor((1 + Math.random()) * 0x10000).toString(6).substring(1);
+};
+
+const idMatch = function (nameID, urlDatabase) {
+    console.log("name.....", nameID)
+    console.log("urldfatbase....", urlDatabase)
+    for (let url in urlDatabase) {
+        console.log("url.....", urlDatabase[url].userID)
+        if (nameID && nameID.id === urlDatabase[url].userID) {
+            return nameID.id
+        } else {
+            return null
         }
     }
-    return null
+
+}
+
+const filterURLByUserid = function (nameID, urlDatabase) {
+    let filterURLs = {}
+    for (let url in urlDatabase) {
+        console.log("urldata.....", urlDatabase[url])
+        console.log("nameIDID...", nameID)
+        if (nameID && nameID.id.toString() === urlDatabase[url].userID) {
+
+            console.log("nameid....", nameID)
+            filterURLs[url] = urlDatabase[url]
+        }
+    }
+    return filterURLs
 }
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -50,14 +71,24 @@ app.get("/urls.json", (req, res) => {
 });
 
 app.get("/urls", (req, res) => {
+    const userLinks = filterURLByUserid(users[req.cookies["user_id"]], urlDatabase)
+    const onlyUser = idMatch(users[req.cookies["user_id"]], urlDatabase)
+    const userID = users[req.cookies["user_id"]]
+
+    console.log("userLINK....", userLinks)
     let templateVars = {
-        urls: urlDatabase,
+        urls: userLinks,
         user: users[req.cookies["user_id"]]
     };
     res.render('urls_index', templateVars);
 });
 
 app.get("/urls/new", (req, res) => {
+    const userId = req.cookies.user_id;
+    if (!userId) {
+        return res.redirect('/login')
+    }
+
     let templateVars = {
         user: users[req.cookies["user_id"]]
     };
@@ -96,13 +127,22 @@ app.get("/u/:shortURL", (req, res) => {
 
 app.post("/urls", (req, res) => {
     const shortURL = generateRandomString();
-    urlDatabase[shortURL] = req.body.longURL;
+    urlDatabase[shortURL] = { longURL: req.body.longURL, userID: req.cookies.user_id };
     res.redirect(`/urls/${shortURL}`);
 });
 
 app.post("/urls/:shortURL/delete", (req, res) => {
+    //get cookie and user from cookie
+    //use filter func to get all url owned by userid
+    // check shorturl === filter func if so delete if not dont
+    const userLinks = filterURLByUserid(users[req.cookies["user_id"]], urlDatabase)
     const shortURL = req.params.shortURL;
-    delete urlDatabase[shortURL];
+    for (link in userLinks) {
+        if (link === shortURL) {
+            delete urlDatabase[shortURL];
+        }
+    }
+
     res.redirect('/urls');
 });
 
@@ -113,7 +153,6 @@ app.post("/urls/:id", (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-    console.log(req.body);
     const email = req.body.email;
     const password = req.body.password;
 
@@ -121,7 +160,6 @@ app.post('/login', (req, res) => {
         return res.status(400).send("email or password cannot be blank");
     }
 
-    const user = findUserByEmail(email);
 
     if (!user) {
         return res.redirect('/register')
@@ -140,8 +178,7 @@ app.post('/register', (req, res) => {
     if (!email || !password) {
         return res.status(400).send("email or password cannot be blank");
     }
-
-    const user = findUserByEmail(email);
+    const user = req.cookies.user_id
 
     if (user) {
         return res.status(400).send('user with that email currently exists')
@@ -155,10 +192,10 @@ app.post('/register', (req, res) => {
         password: password
     }
 
-    console.log("users", users)
+
     res.cookie('user_id', id);
     res.redirect('/urls')
-})
+});
 app.post("/logout", (req, res) => {
     res.clearCookie('user_id');
     res.redirect('/urls');
