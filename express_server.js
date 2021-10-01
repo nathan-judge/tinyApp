@@ -2,7 +2,9 @@ const express = require("express");
 const app = express();
 const PORT = 8080; // default port is 8080
 const bodyParser = require("body-parser");
-const cookieParser = require('cookie-parser')
+const cookieSession = require('cookie-session')
+const bcrypt = require('bcryptjs');
+const { generateRandomString, idMatch, filterURLByUserid, findUserByEmail, emailAlreadyRegistered } = require("./helpers")
 
 const urlDatabase = {
     b6UTxQ: {
@@ -26,41 +28,15 @@ const users = {
         password: "dishwasher-funk"
     }
 }
-const generateRandomString = function () {
-    let randomString = "";
-    return randomString += Math.floor((1 + Math.random()) * 0x10000).toString(6).substring(1);
-};
 
-const idMatch = function (nameID, urlDatabase) {
-    console.log("name.....", nameID)
-    console.log("urldfatbase....", urlDatabase)
-    for (let url in urlDatabase) {
-        console.log("url.....", urlDatabase[url].userID)
-        if (nameID && nameID.id === urlDatabase[url].userID) {
-            return nameID.id
-        } else {
-            return null
-        }
-    }
 
-}
 
-const filterURLByUserid = function (nameID, urlDatabase) {
-    let filterURLs = {}
-    for (let url in urlDatabase) {
-        console.log("urldata.....", urlDatabase[url])
-        console.log("nameIDID...", nameID)
-        if (nameID && nameID.id.toString() === urlDatabase[url].userID) {
-
-            console.log("nameid....", nameID)
-            filterURLs[url] = urlDatabase[url]
-        }
-    }
-    return filterURLs
-}
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use(cookieSession({
+    name: 'session',
+    keys: ['key1']
+}))
 
 app.get("/", (req, res) => {
     res.send("Hello!");
@@ -71,49 +47,58 @@ app.get("/urls.json", (req, res) => {
 });
 
 app.get("/urls", (req, res) => {
-    const userLinks = filterURLByUserid(users[req.cookies["user_id"]], urlDatabase)
-    const onlyUser = idMatch(users[req.cookies["user_id"]], urlDatabase)
-    const userID = users[req.cookies["user_id"]]
+    const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase)
+    const onlyUser = idMatch(users[req.session.user_id], urlDatabase)
+    const userID = users[req.session.user_id]
 
-    console.log("userLINK....", userLinks)
     let templateVars = {
         urls: userLinks,
-        user: users[req.cookies["user_id"]]
+        user: users[req.session.user_id]
     };
     res.render('urls_index', templateVars);
 });
 
 app.get("/urls/new", (req, res) => {
-    const userId = req.cookies.user_id;
+    const userId = req.session.user_id;
     if (!userId) {
         return res.redirect('/login')
     }
 
     let templateVars = {
-        user: users[req.cookies["user_id"]]
+        user: users[req.session.user_id]
     };
     res.render("urls_new", templateVars);
 });
 
 app.get("/register", (req, res) => {
     let templateVars = {
-        user: users[req.cookies["user_id"]]
+        user: users[req.session.user_id]
     };
     res.render("register", templateVars);
 });
 app.get("/login", (req, res) => {
     let templateVars = {
-        user: users[req.cookies["user_id"]]
+        user: users[req.session.user_id]
     };
     res.render("login", templateVars);
 });
 app.get("/urls/:shortURL", (req, res) => {
-    let templateVars = {
-        shortURL: req.params.shortURL,
-        longURL: urlDatabase[req.params.shortURL],
-        user: users[req.cookies["user_id"]],
-    };
-    res.render("urls_show", templateVars);
+    const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase)
+    const shortURL = req.params.shortURL;
+    for (link in userLinks) {
+        if (link === shortURL) {
+            let templateVars = {
+                shortURL: req.params.shortURL,
+                longURL: urlDatabase[req.params.shortURL]["longURL"],
+
+                user: users[req.session.user_id],
+            };
+
+            res.render("urls_show", templateVars);
+        }
+    }
+
+
 });
 
 app.get("/u/:shortURL", (req, res) => {
@@ -127,7 +112,7 @@ app.get("/u/:shortURL", (req, res) => {
 
 app.post("/urls", (req, res) => {
     const shortURL = generateRandomString();
-    urlDatabase[shortURL] = { longURL: req.body.longURL, userID: req.cookies.user_id };
+    urlDatabase[shortURL] = { longURL: req.body.longURL, userID: req.session.user_id };
     res.redirect(`/urls/${shortURL}`);
 });
 
@@ -135,7 +120,7 @@ app.post("/urls/:shortURL/delete", (req, res) => {
     //get cookie and user from cookie
     //use filter func to get all url owned by userid
     // check shorturl === filter func if so delete if not dont
-    const userLinks = filterURLByUserid(users[req.cookies["user_id"]], urlDatabase)
+    const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase)
     const shortURL = req.params.shortURL;
     for (link in userLinks) {
         if (link === shortURL) {
@@ -160,15 +145,18 @@ app.post('/login', (req, res) => {
         return res.status(400).send("email or password cannot be blank");
     }
 
+    let user = findUserByEmail(email, users)
 
     if (!user) {
         return res.redirect('/register')
     }
-    if (user.password !== password) {
+
+
+    if (!bcrypt.compareSync(password, user['password'])) {
         return res.status(400).send('password does not match')
     }
 
-    res.cookie('user_id', user.id);
+    req.session.user_id = user["id"];
     res.redirect('/urls');
 })
 app.post('/register', (req, res) => {
@@ -177,30 +165,29 @@ app.post('/register', (req, res) => {
 
     if (!email || !password) {
         return res.status(400).send("email or password cannot be blank");
+    } else if (emailAlreadyRegistered(email, users)) {
+        res.status(400).send("Please try a differnt email, this email is already registered with an account");
     }
-    const user = req.cookies.user_id
 
-    if (user) {
-        return res.status(400).send('user with that email currently exists')
-    }
 
     const id = Math.floor(Math.random() * 2000) + 1;
 
     users[id] = {
         id: id,
         email: email,
-        password: password
+        password: bcrypt.hashSync(password, 10),
     }
 
 
-    res.cookie('user_id', id);
+
+    req.session.user_id = id;
     res.redirect('/urls')
 });
 app.post("/logout", (req, res) => {
-    res.clearCookie('user_id');
+    req.session.user_id = null;
     res.redirect('/urls');
 });
 
 app.listen(PORT, () => {
-    console.log(`Example app listening on port ${PORT}!`);
+    console.log(`tinyApp listening on port ${PORT}`);
 });
