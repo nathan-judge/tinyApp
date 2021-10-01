@@ -1,13 +1,13 @@
 const express = require("express");
 const app = express();
-const PORT = 8080; // default port is 8080
+const PORT = 8080;
 const bodyParser = require("body-parser");
-const cookieSession = require('cookie-session')
+const cookieSession = require('cookie-session');
 const bcrypt = require('bcryptjs');
-const { generateRandomString, filterURLByUserid, findUserByEmail, emailAlreadyRegistered } = require("./helpers")
+const { generateRandomString, filterURLByUserid, findUserByEmail, emailAlreadyRegistered } = require("./helpers");
 
 const urlDatabase = {};
-const users = {}
+const users = {};
 
 
 
@@ -16,20 +16,15 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieSession({
     name: 'session',
     keys: ['key1']
-}))
+}));
 
 app.get("/", (req, res) => {
-    res.send("Hello!");
+    res.redirect("/register");
 });
 
-app.get("/urls.json", (req, res) => {
-    res.json(urlDatabase);
-});
 
 app.get("/urls", (req, res) => {
-    const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase)
-    // const onlyUser = idMatch(users[req.session.user_id], urlDatabase)
-    // const userID = users[req.session.user_id]
+    const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase);
 
     let templateVars = {
         urls: userLinks,
@@ -41,7 +36,7 @@ app.get("/urls", (req, res) => {
 app.get("/urls/new", (req, res) => {
     const userId = req.session.user_id;
     if (!userId) {
-        return res.redirect('/login')
+        return res.redirect('/login');
     }
 
     let templateVars = {
@@ -63,7 +58,7 @@ app.get("/login", (req, res) => {
     res.render("login", templateVars);
 });
 app.get("/urls/:shortURL", (req, res) => {
-    const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase)
+    const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase);
     const shortURL = req.params.shortURL;
     for (link in userLinks) {
         if (link === shortURL) {
@@ -81,6 +76,8 @@ app.get("/urls/:shortURL", (req, res) => {
 
 });
 
+
+
 app.get("/u/:shortURL", (req, res) => {
     const longURL = urlDatabase[req.params.shortURL];
     if (longURL === undefined) {
@@ -97,24 +94,30 @@ app.post("/urls", (req, res) => {
 });
 
 app.post("/urls/:shortURL/delete", (req, res) => {
-    //get cookie and user from cookie
-    //use filter func to get all url owned by userid
-    // check shorturl === filter func if so delete if not dont
     const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase)
     const shortURL = req.params.shortURL;
     for (link in userLinks) {
         if (link === shortURL) {
             delete urlDatabase[shortURL];
+            res.redirect('/urls');
+        } else {
+            res.send("You do not have authorization to delete this short URL.");
         }
     }
+    ;
 
-    res.redirect('/urls');
 });
 
 app.post("/urls/:id", (req, res) => {
-    const shortURL = req.params.id;
-    urlDatabase[shortURL] = req.body.newURL;
-    res.redirect('/urls');
+    const userID = req.session.user_id;
+    const userUrls = filterURLByUserid(users[req.session.user_id], urlDatabase);
+    if (Object.keys(userUrls).includes(req.params.id)) {
+        const shortURL = req.params.id;
+        urlDatabase[shortURL].longURL = req.body.newURL;
+        res.redirect('/urls');
+    } else {
+        res.status(401).send("You do not have authorization to edit this short URL.");
+    }
 });
 
 app.post('/login', (req, res) => {
@@ -125,20 +128,20 @@ app.post('/login', (req, res) => {
         return res.status(400).send("email or password cannot be blank");
     }
 
-    let user = findUserByEmail(email, users)
+    let user = findUserByEmail(email, users);
 
     if (!user) {
-        return res.redirect('/register')
+        return res.redirect('/register');
     }
 
 
     if (!bcrypt.compareSync(password, user['password'])) {
-        return res.status(400).send('password does not match')
+        return res.status(400).send('password does not match');
     }
 
     req.session.user_id = user["id"];
     res.redirect('/urls');
-})
+});
 app.post('/register', (req, res) => {
     const email = req.body.email;
     const password = req.body.password;
@@ -156,12 +159,12 @@ app.post('/register', (req, res) => {
         id: id,
         email: email,
         password: bcrypt.hashSync(password, 10),
-    }
+    };
 
 
 
     req.session.user_id = id;
-    res.redirect('/urls')
+    res.redirect('/urls');
 });
 app.post("/logout", (req, res) => {
     req.session.user_id = null;

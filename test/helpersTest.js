@@ -29,7 +29,6 @@ describe('findUserByEmail', function () {
     it('should return a user with a valid email', function () {
         const user = findUserByEmail("user@example.com", testUsers);
         const expectedOutput = "userRandomID";
-        console.log("testex...", user.id, expectedOutput)
         assert.equal(user.id, expectedOutput);
 
     });
@@ -60,8 +59,8 @@ describe('filterURLByUserid', function () {
                 userID: "userRandomID"
             }
         }
-        // console.log("exptO..", expectedOutput)
-        console.log("userlink...", userLinks === expectedOutput)
+
+
         assert.equal(JSON.stringify(userLinks), JSON.stringify(expectedOutput));
 
     });
