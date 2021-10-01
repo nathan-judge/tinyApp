@@ -4,30 +4,10 @@ const PORT = 8080; // default port is 8080
 const bodyParser = require("body-parser");
 const cookieSession = require('cookie-session')
 const bcrypt = require('bcryptjs');
-const { generateRandomString, idMatch, filterURLByUserid, findUserByEmail, emailAlreadyRegistered } = require("./helpers")
+const { generateRandomString, filterURLByUserid, findUserByEmail, emailAlreadyRegistered } = require("./helpers")
 
-const urlDatabase = {
-    b6UTxQ: {
-        longURL: "https://www.tsn.ca",
-        userID: "aJ48lW"
-    },
-    i3BoGr: {
-        longURL: "https://www.google.ca",
-        userID: "aJ48lW"
-    }
-};
-const users = {
-    "userRandomID": {
-        id: "userRandomID",
-        email: "user@example.com",
-        password: "purple-monkey-dinosaur"
-    },
-    "user2RandomID": {
-        id: "user2RandomID",
-        email: "user2@example.com",
-        password: "dishwasher-funk"
-    }
-}
+const urlDatabase = {};
+const users = {}
 
 
 
@@ -48,8 +28,8 @@ app.get("/urls.json", (req, res) => {
 
 app.get("/urls", (req, res) => {
     const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase)
-    const onlyUser = idMatch(users[req.session.user_id], urlDatabase)
-    const userID = users[req.session.user_id]
+    // const onlyUser = idMatch(users[req.session.user_id], urlDatabase)
+    // const userID = users[req.session.user_id]
 
     let templateVars = {
         urls: userLinks,
