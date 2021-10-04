@@ -25,7 +25,10 @@ app.get("/", (req, res) => {
 
 app.get("/urls", (req, res) => {
     const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase);
-
+    const userId = req.session.user_id;
+    if (!userId) {
+        return res.redirect('/login');
+    }
     let templateVars = {
         urls: userLinks,
         user: users[req.session.user_id]
@@ -78,15 +81,26 @@ app.get("/urls/:shortURL", (req, res) => {
 
 
 
+// app.get("/u/:shortURL", (req, res) => {
+//     const longURL = urlDatabase[req.params.shortURL];
+//     if (longURL === undefined) {
+//         res.send(302);
+//     } else {
+//         res.redirect(longURL);
+//     }
+// });
 app.get("/u/:shortURL", (req, res) => {
-    const longURL = urlDatabase[req.params.shortURL];
-    if (longURL === undefined) {
-        res.send(302);
-    } else {
+    if (urlDatabase[req.params.shortURL]) {
+      const longURL = urlDatabase[req.params.shortURL].longURL;
+      if (longURL === undefined) {
+        res.status(302);
+      } else {
         res.redirect(longURL);
+      }
+    } else {
+      res.status(404).send("The short URL you are trying to access does not correspond with a long URL at this time.");
     }
-});
-
+  });
 app.post("/urls", (req, res) => {
     const shortURL = generateRandomString();
     urlDatabase[shortURL] = { longURL: req.body.longURL, userID: req.session.user_id };
