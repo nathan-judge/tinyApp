@@ -6,10 +6,9 @@ const cookieSession = require('cookie-session');
 const bcrypt = require('bcryptjs');
 const { generateRandomString, filterURLByUserid, findUserByEmail, emailAlreadyRegistered } = require("./helpers");
 
+// database for users and urls
 const urlDatabase = {};
 const users = {};
-
-
 
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -18,16 +17,17 @@ app.use(cookieSession({
     keys: ['key1']
 }));
 
+// gets home page/ register page
 app.get("/", (req, res) => {
     res.redirect("/register");
 });
 
-
+// gets url page and any urls if any
 app.get("/urls", (req, res) => {
     const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase);
     const userId = req.session.user_id;
     if (!userId) {
-        return res.redirect('/login');
+        return res.status(401).send('you are not logged in, please log in')
     }
     let templateVars = {
         urls: userLinks,
@@ -36,6 +36,7 @@ app.get("/urls", (req, res) => {
     res.render('urls_index', templateVars);
 });
 
+// gets create url page 
 app.get("/urls/new", (req, res) => {
     const userId = req.session.user_id;
     if (!userId) {
@@ -48,21 +49,36 @@ app.get("/urls/new", (req, res) => {
     res.render("urls_new", templateVars);
 });
 
+//gets register page
 app.get("/register", (req, res) => {
     let templateVars = {
         user: users[req.session.user_id]
     };
     res.render("register", templateVars);
 });
+
+//gets login page
 app.get("/login", (req, res) => {
     let templateVars = {
         user: users[req.session.user_id]
     };
     res.render("login", templateVars);
 });
+
+//gets shortURL edit page 
 app.get("/urls/:shortURL", (req, res) => {
     const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase);
+
     const shortURL = req.params.shortURL;
+    if (!urlDatabase[shortURL]) {
+        res.status(404).send('this short url does not exist')
+        return
+    }
+    if (req.session.user_id != urlDatabase[shortURL].userID) {
+        res.status(401).send('you do not have authorization')
+        return
+    }
+
     for (link in userLinks) {
         if (link === shortURL) {
             let templateVars = {
@@ -79,26 +95,28 @@ app.get("/urls/:shortURL", (req, res) => {
 
 });
 
-
-
+// gets to orginal longURL site with shortURL
 app.get("/u/:shortURL", (req, res) => {
     if (urlDatabase[req.params.shortURL]) {
-      const longURL = urlDatabase[req.params.shortURL].longURL;
-      if (longURL === undefined) {
-        res.status(302);
-      } else {
-        res.redirect(longURL);
-      }
+        const longURL = urlDatabase[req.params.shortURL].longURL;
+        if (longURL === undefined) {
+            res.status(302);
+        } else {
+            res.redirect(longURL);
+        }
     } else {
-      res.status(404).send("The short URL you are trying to access does not correspond with a long URL at this time.");
+        res.status(404).send("The short URL you are trying to access does not correspond with a long URL at this time.");
     }
-  });
+});
+
+// adds new longURL with shortURL to url page
 app.post("/urls", (req, res) => {
     const shortURL = generateRandomString();
     urlDatabase[shortURL] = { longURL: req.body.longURL, userID: req.session.user_id };
     res.redirect(`/urls/${shortURL}`);
 });
 
+// deletes url by shortURL
 app.post("/urls/:shortURL/delete", (req, res) => {
     const userLinks = filterURLByUserid(users[req.session.user_id], urlDatabase)
     const shortURL = req.params.shortURL;
@@ -114,6 +132,7 @@ app.post("/urls/:shortURL/delete", (req, res) => {
 
 });
 
+// edits url 
 app.post("/urls/:id", (req, res) => {
     const userID = req.session.user_id;
     const userUrls = filterURLByUserid(users[req.session.user_id], urlDatabase);
@@ -126,6 +145,7 @@ app.post("/urls/:id", (req, res) => {
     }
 });
 
+//login user
 app.post('/login', (req, res) => {
     const email = req.body.email;
     const password = req.body.password;
@@ -137,7 +157,7 @@ app.post('/login', (req, res) => {
     let user = findUserByEmail(email, users);
 
     if (!user) {
-        return res.redirect('/register');
+        return res.status(401).send('you are not registered, please create an account')
     }
 
 
@@ -148,6 +168,8 @@ app.post('/login', (req, res) => {
     req.session.user_id = user["id"];
     res.redirect('/urls');
 });
+
+// registers a new user
 app.post('/register', (req, res) => {
     const email = req.body.email;
     const password = req.body.password;
@@ -172,11 +194,14 @@ app.post('/register', (req, res) => {
     req.session.user_id = id;
     res.redirect('/urls');
 });
+
+//logout user
 app.post("/logout", (req, res) => {
     req.session.user_id = null;
     res.redirect('/urls');
 });
 
+// what port its on 
 app.listen(PORT, () => {
     console.log(`tinyApp listening on port ${PORT}`);
 });
